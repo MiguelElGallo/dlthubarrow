@@ -10,6 +10,20 @@ Stress-test dlt's Arrow route on the smallest Azure Container Apps footprint:
 
 The app extracts Snowflake result sets with Arrow batches, yields `pyarrow.Table` objects into dlt, and logs memory, disk, batch, and throughput metrics during the run.
 
+## Flow
+
+```mermaid
+flowchart LR
+    A["Snowflake sample data\nSNOWFLAKE_SAMPLE_DATA.TPCH_SF1.LINEITEM"] --> B["Container App\n0.25 vCPU / 0.5 GiB"]
+    K["Azure Key Vault\nSnowflake PAT + run key"] --> B
+    B --> C["Snowflake connector\nkeyset-paged queries + fetch_arrow_all()"]
+    C --> D["Arrow pages\npyarrow.Table"]
+    D --> E["dlt pipeline\nloader_file_format=parquet"]
+    E --> F["Snowflake target\ndummy.TPCH_SF1.LINEITEM"]
+    B --> G["Telemetry\nmemory, disk, batch, throughput"]
+    G --> H["Azure Monitor\nLogs + Metrics"]
+```
+
 ## Quick Start
 
 ### 1. Prerequisites
@@ -130,6 +144,36 @@ The benchmark does not yield Python dict rows into dlt.
 - dlt loads with `loader_file_format="parquet"`
 
 That matches the Arrow route described in the dlt article, with Arrow entering from the Snowflake connector rather than from dlt's SQL backend abstraction.
+
+## TPCH_SF1 Result
+
+Successful Azure run on the smallest Container Apps size:
+
+| Metric | Value |
+| --- | --- |
+| Compute | `0.25 vCPU / 0.5 GiB` |
+| Extracted rows | `6,001,215` |
+| Loaded rows | `6,001,215` |
+| Arrow pages / batches | `121` |
+| dlt load packages | `1` |
+| dlt jobs in package | `2` |
+| Stage duration | `211.24s` |
+| Throughput | `28,410 rows/s` |
+| Source bytes | `165,228,544` |
+| Effective throughput | `0.746 MB/s` |
+| Peak in-app cgroup memory | `536,752,128 bytes` |
+| Memory at stage completion | `282,013,696 bytes` |
+| RSS at stage completion | `337,235,968 bytes` |
+| Temp/work disk at stage completion | `241,966,510 bytes` |
+| Replica restarts during TPCH_SF1 | `0` |
+
+Azure Monitor view for the same window:
+
+- max `MemoryPercentage`: `99%`
+- max `WorkingSetBytes`: `318,771,200`
+- max `CpuPercentage`: `62%`
+
+Interpretation: `TPCH_SF1` completes on the smallest Container Apps footprint, but memory is still the limiting resource and the extraction phase runs very close to the container memory cap.
 
 ## Local Development
 
