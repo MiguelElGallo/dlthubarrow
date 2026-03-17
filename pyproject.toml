@@ -1,0 +1,36 @@
+[project]
+name = "dlthubarrow"
+version = "0.1.0"
+description = "Stress-test dlt Apache Arrow loads from Snowflake to Snowflake on tiny Azure Container Apps compute."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "azure-monitor-opentelemetry>=1.6.9",
+  "dlt[snowflake]>=1.21.0",
+  "fastapi>=0.116.1",
+  "psutil>=7.1.0",
+  "pyarrow>=21.0.0",
+  "pydantic-settings>=2.11.0",
+  "snowflake-connector-python[pandas]>=4.0.0",
+  "uvicorn[standard]>=0.35.0",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.4.2",
+  "ruff>=0.13.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/benchmark_runner"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

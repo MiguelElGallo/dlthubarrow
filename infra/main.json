@@ -1,0 +1,919 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.40.2.10011",
+      "templateHash": "18352286574780373846"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "metadata": {
+        "description": "Short environment name used in resource naming."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region for all resources."
+      }
+    },
+    "containerAppImage": {
+      "type": "string",
+      "defaultValue": "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest",
+      "metadata": {
+        "description": "Container image for the Azure Container App."
+      }
+    },
+    "containerCpu": {
+      "type": "string",
+      "defaultValue": "0.25",
+      "metadata": {
+        "description": "CPU cores for the container app as a numeric string."
+      }
+    },
+    "containerMemory": {
+      "type": "string",
+      "defaultValue": "0.5Gi",
+      "metadata": {
+        "description": "Container memory setting."
+      }
+    },
+    "benchmarkApiKey": {
+      "type": "securestring",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "API key required to trigger benchmark runs."
+      }
+    },
+    "sourceSnowflakeAccount": {
+      "type": "string",
+      "metadata": {
+        "description": "Snowflake source account identifier."
+      }
+    },
+    "sourceSnowflakeUser": {
+      "type": "string",
+      "metadata": {
+        "description": "Snowflake source user."
+      }
+    },
+    "sourceSnowflakeToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Snowflake source PAT."
+      }
+    },
+    "sourceSnowflakeWarehouse": {
+      "type": "string",
+      "defaultValue": "COMPUTE_WH",
+      "metadata": {
+        "description": "Snowflake source warehouse."
+      }
+    },
+    "sourceSnowflakeRole": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Snowflake source role."
+      }
+    },
+    "sourceSnowflakeDatabase": {
+      "type": "string",
+      "defaultValue": "SNOWFLAKE_SAMPLE_DATA",
+      "metadata": {
+        "description": "Snowflake source database."
+      }
+    },
+    "destinationSnowflakeAccount": {
+      "type": "string",
+      "metadata": {
+        "description": "Snowflake destination account identifier."
+      }
+    },
+    "destinationSnowflakeUser": {
+      "type": "string",
+      "metadata": {
+        "description": "Snowflake destination user."
+      }
+    },
+    "destinationSnowflakeToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Snowflake destination PAT."
+      }
+    },
+    "destinationSnowflakeWarehouse": {
+      "type": "string",
+      "defaultValue": "COMPUTE_WH",
+      "metadata": {
+        "description": "Snowflake destination warehouse."
+      }
+    },
+    "destinationSnowflakeRole": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Snowflake destination role."
+      }
+    },
+    "destinationSnowflakeDatabase": {
+      "type": "string",
+      "defaultValue": "dummy",
+      "metadata": {
+        "description": "Snowflake destination database."
+      }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[toLower(uniqueString(subscription().id, resourceGroup().id, parameters('environmentName')))]",
+    "containerAppsEnvironmentName": "[format('cae-{0}', parameters('environmentName'))]",
+    "containerAppName": "[format('ca-{0}', parameters('environmentName'))]",
+    "containerAppIdentityName": "[format('id-ca-{0}', parameters('environmentName'))]",
+    "acrName": "[format('acr{0}', variables('uniqueSuffix'))]",
+    "keyVaultName": "[format('kv-{0}', substring(variables('uniqueSuffix'), 0, 10))]",
+    "appInsightsName": "[format('appi-{0}', parameters('environmentName'))]",
+    "logAnalyticsName": "[format('law-{0}', parameters('environmentName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[variables('containerAppIdentityName')]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "keyvault",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "keyVaultName": {
+            "value": "[variables('keyVaultName')]"
+          },
+          "containerAppPrincipalId": {
+            "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName')), '2023-01-31').principalId]"
+          },
+          "secrets": {
+            "value": [
+              {
+                "name": "benchmark-api-key",
+                "value": "[parameters('benchmarkApiKey')]"
+              },
+              {
+                "name": "source-snowflake-token",
+                "value": "[parameters('sourceSnowflakeToken')]"
+              },
+              {
+                "name": "destination-snowflake-token",
+                "value": "[parameters('destinationSnowflakeToken')]"
+              }
+            ]
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "7902882326572400093"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Key Vault."
+              }
+            },
+            "keyVaultName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Key Vault."
+              }
+            },
+            "containerAppPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID of the container app managed identity."
+              }
+            },
+            "secrets": {
+              "type": "array",
+              "metadata": {
+                "description": "Secrets to create inside the vault."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "tenantId": "[subscription().tenantId]",
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "enableRbacAuthorization": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 7,
+                "enablePurgeProtection": true,
+                "publicNetworkAccess": "Enabled",
+                "networkAcls": {
+                  "defaultAction": "Allow",
+                  "bypass": "AzureServices"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), parameters('containerAppPrincipalId'), 'KeyVaultSecretsUser')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+                "principalId": "[parameters('containerAppPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "secretResources",
+                "count": "[length(parameters('secrets'))]"
+              },
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), string(parameters('secrets')[copyIndex()].name))]",
+              "properties": {
+                "value": "[string(parameters('secrets')[copyIndex()].value)]",
+                "contentType": "text/plain",
+                "attributes": {
+                  "enabled": true
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "keyVaultName": {
+              "type": "string",
+              "value": "[parameters('keyVaultName')]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-07-01').vaultUri]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "acr",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "acrName": {
+            "value": "[variables('acrName')]"
+          },
+          "pullPrincipalId": {
+            "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName')), '2023-01-31').principalId]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "16453348899372526883"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for the Container Registry."
+              }
+            },
+            "acrName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the Azure Container Registry."
+              }
+            },
+            "acrSku": {
+              "type": "string",
+              "defaultValue": "Basic",
+              "allowedValues": [
+                "Basic",
+                "Standard",
+                "Premium"
+              ],
+              "metadata": {
+                "description": "SKU for the Container Registry."
+              }
+            },
+            "pullPrincipalId": {
+              "type": "string",
+              "metadata": {
+                "description": "Principal ID to grant AcrPull role."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ContainerRegistry/registries",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('acrName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "[parameters('acrSku')]"
+              },
+              "properties": {
+                "adminUserEnabled": false,
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), parameters('pullPrincipalId'), 'AcrPull')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+                "principalId": "[parameters('pullPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "acrName": {
+              "type": "string",
+              "value": "[parameters('acrName')]"
+            },
+            "acrLoginServer": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer]"
+            },
+            "acrId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appinsights",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "applicationInsightsName": {
+            "value": "[variables('appInsightsName')]"
+          },
+          "logAnalyticsWorkspaceName": {
+            "value": "[variables('logAnalyticsName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "17364993394969125379"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region for monitoring resources."
+              }
+            },
+            "applicationInsightsName": {
+              "type": "string",
+              "metadata": {
+                "description": "Application Insights resource name."
+              }
+            },
+            "logAnalyticsWorkspaceName": {
+              "type": "string",
+              "metadata": {
+                "description": "Log Analytics workspace name."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2022-10-01",
+              "name": "[parameters('logAnalyticsWorkspaceName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "retentionInDays": 30,
+                "sku": {
+                  "name": "PerGB2018"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[parameters('applicationInsightsName')]",
+              "location": "[parameters('location')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]",
+                "IngestionMode": "LogAnalytics"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "applicationInsightsName": {
+              "type": "string",
+              "value": "[parameters('applicationInsightsName')]"
+            },
+            "applicationInsightsConnectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('applicationInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            "logAnalyticsWorkspaceName": {
+              "type": "string",
+              "value": "[parameters('logAnalyticsWorkspaceName')]"
+            },
+            "logAnalyticsCustomerId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2022-10-01').customerId]"
+            },
+            "logAnalyticsSharedKey": {
+              "type": "string",
+              "value": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', parameters('logAnalyticsWorkspaceName')), '2022-10-01').primarySharedKey]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "containerApp",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "containerAppsEnvironmentName": {
+            "value": "[variables('containerAppsEnvironmentName')]"
+          },
+          "containerAppName": {
+            "value": "[variables('containerAppName')]"
+          },
+          "containerAppIdentityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName'))]"
+          },
+          "containerAppImage": {
+            "value": "[parameters('containerAppImage')]"
+          },
+          "containerCpu": {
+            "value": "[parameters('containerCpu')]"
+          },
+          "containerMemory": {
+            "value": "[parameters('containerMemory')]"
+          },
+          "acrLoginServer": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'acr'), '2025-04-01').outputs.acrLoginServer.value]"
+          },
+          "appInsightsConnectionString": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appinsights'), '2025-04-01').outputs.applicationInsightsConnectionString.value]"
+          },
+          "logAnalyticsCustomerId": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appinsights'), '2025-04-01').outputs.logAnalyticsCustomerId.value]"
+          },
+          "logAnalyticsSharedKey": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appinsights'), '2025-04-01').outputs.logAnalyticsSharedKey.value]"
+          },
+          "sourceSnowflakeAccount": {
+            "value": "[parameters('sourceSnowflakeAccount')]"
+          },
+          "sourceSnowflakeUser": {
+            "value": "[parameters('sourceSnowflakeUser')]"
+          },
+          "sourceSnowflakeWarehouse": {
+            "value": "[parameters('sourceSnowflakeWarehouse')]"
+          },
+          "sourceSnowflakeRole": {
+            "value": "[parameters('sourceSnowflakeRole')]"
+          },
+          "sourceSnowflakeDatabase": {
+            "value": "[parameters('sourceSnowflakeDatabase')]"
+          },
+          "destinationSnowflakeAccount": {
+            "value": "[parameters('destinationSnowflakeAccount')]"
+          },
+          "destinationSnowflakeUser": {
+            "value": "[parameters('destinationSnowflakeUser')]"
+          },
+          "destinationSnowflakeWarehouse": {
+            "value": "[parameters('destinationSnowflakeWarehouse')]"
+          },
+          "destinationSnowflakeRole": {
+            "value": "[parameters('destinationSnowflakeRole')]"
+          },
+          "destinationSnowflakeDatabase": {
+            "value": "[parameters('destinationSnowflakeDatabase')]"
+          },
+          "secretUris": {
+            "value": {
+              "benchmarkApiKey": "[format('{0}secrets/benchmark-api-key', reference(resourceId('Microsoft.Resources/deployments', 'keyvault'), '2025-04-01').outputs.keyVaultUri.value)]",
+              "sourceSnowflakeToken": "[format('{0}secrets/source-snowflake-token', reference(resourceId('Microsoft.Resources/deployments', 'keyvault'), '2025-04-01').outputs.keyVaultUri.value)]",
+              "destinationSnowflakeToken": "[format('{0}secrets/destination-snowflake-token', reference(resourceId('Microsoft.Resources/deployments', 'keyvault'), '2025-04-01').outputs.keyVaultUri.value)]"
+            }
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "2498908301441640992"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "containerAppsEnvironmentName": {
+              "type": "string"
+            },
+            "containerAppName": {
+              "type": "string"
+            },
+            "containerAppIdentityId": {
+              "type": "string"
+            },
+            "containerAppImage": {
+              "type": "string"
+            },
+            "containerCpu": {
+              "type": "string"
+            },
+            "containerMemory": {
+              "type": "string"
+            },
+            "acrLoginServer": {
+              "type": "string"
+            },
+            "appInsightsConnectionString": {
+              "type": "string"
+            },
+            "logAnalyticsCustomerId": {
+              "type": "string"
+            },
+            "sourceSnowflakeAccount": {
+              "type": "string"
+            },
+            "sourceSnowflakeUser": {
+              "type": "string"
+            },
+            "sourceSnowflakeWarehouse": {
+              "type": "string"
+            },
+            "sourceSnowflakeRole": {
+              "type": "string"
+            },
+            "sourceSnowflakeDatabase": {
+              "type": "string"
+            },
+            "destinationSnowflakeAccount": {
+              "type": "string"
+            },
+            "destinationSnowflakeUser": {
+              "type": "string"
+            },
+            "destinationSnowflakeWarehouse": {
+              "type": "string"
+            },
+            "destinationSnowflakeRole": {
+              "type": "string"
+            },
+            "destinationSnowflakeDatabase": {
+              "type": "string"
+            },
+            "logAnalyticsSharedKey": {
+              "type": "securestring"
+            },
+            "secretUris": {
+              "type": "object"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/managedEnvironments",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('containerAppsEnvironmentName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "appLogsConfiguration": {
+                  "destination": "log-analytics",
+                  "logAnalyticsConfiguration": {
+                    "customerId": "[parameters('logAnalyticsCustomerId')]",
+                    "sharedKey": "[parameters('logAnalyticsSharedKey')]"
+                  }
+                }
+              }
+            },
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2024-03-01",
+              "name": "[parameters('containerAppName')]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "azd-service-name": "benchmark-runner"
+              },
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('containerAppIdentityId'))]": {}
+                }
+              },
+              "properties": {
+                "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppsEnvironmentName'))]",
+                "configuration": {
+                  "activeRevisionsMode": "Single",
+                  "secrets": [
+                    {
+                      "name": "benchmark-api-key",
+                      "keyVaultUrl": "[string(parameters('secretUris').benchmarkApiKey)]",
+                      "identity": "[parameters('containerAppIdentityId')]"
+                    },
+                    {
+                      "name": "source-snowflake-token",
+                      "keyVaultUrl": "[string(parameters('secretUris').sourceSnowflakeToken)]",
+                      "identity": "[parameters('containerAppIdentityId')]"
+                    },
+                    {
+                      "name": "destination-snowflake-token",
+                      "keyVaultUrl": "[string(parameters('secretUris').destinationSnowflakeToken)]",
+                      "identity": "[parameters('containerAppIdentityId')]"
+                    }
+                  ],
+                  "registries": [
+                    {
+                      "server": "[parameters('acrLoginServer')]",
+                      "identity": "[parameters('containerAppIdentityId')]"
+                    }
+                  ],
+                  "ingress": {
+                    "external": true,
+                    "targetPort": 8080,
+                    "transport": "auto"
+                  }
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "app",
+                      "image": "[parameters('containerAppImage')]",
+                      "resources": {
+                        "cpu": "[json(parameters('containerCpu'))]",
+                        "memory": "[parameters('containerMemory')]"
+                      },
+                      "env": [
+                        {
+                          "name": "PORT",
+                          "value": "8080"
+                        },
+                        {
+                          "name": "APPLICATIONINSIGHTS_CONNECTION_STRING",
+                          "value": "[parameters('appInsightsConnectionString')]"
+                        },
+                        {
+                          "name": "RUN_API_KEY",
+                          "secretRef": "benchmark-api-key"
+                        },
+                        {
+                          "name": "SOURCE_SNOWFLAKE_ACCOUNT",
+                          "value": "[parameters('sourceSnowflakeAccount')]"
+                        },
+                        {
+                          "name": "SOURCE_SNOWFLAKE_USER",
+                          "value": "[parameters('sourceSnowflakeUser')]"
+                        },
+                        {
+                          "name": "SOURCE_SNOWFLAKE_PASSWORD",
+                          "secretRef": "source-snowflake-token"
+                        },
+                        {
+                          "name": "SOURCE_SNOWFLAKE_WAREHOUSE",
+                          "value": "[parameters('sourceSnowflakeWarehouse')]"
+                        },
+                        {
+                          "name": "SOURCE_SNOWFLAKE_ROLE",
+                          "value": "[parameters('sourceSnowflakeRole')]"
+                        },
+                        {
+                          "name": "SOURCE_SNOWFLAKE_DATABASE",
+                          "value": "[parameters('sourceSnowflakeDatabase')]"
+                        },
+                        {
+                          "name": "DESTINATION_SNOWFLAKE_ACCOUNT",
+                          "value": "[parameters('destinationSnowflakeAccount')]"
+                        },
+                        {
+                          "name": "DESTINATION_SNOWFLAKE_USER",
+                          "value": "[parameters('destinationSnowflakeUser')]"
+                        },
+                        {
+                          "name": "DESTINATION_SNOWFLAKE_PASSWORD",
+                          "secretRef": "destination-snowflake-token"
+                        },
+                        {
+                          "name": "DESTINATION_SNOWFLAKE_WAREHOUSE",
+                          "value": "[parameters('destinationSnowflakeWarehouse')]"
+                        },
+                        {
+                          "name": "DESTINATION_SNOWFLAKE_ROLE",
+                          "value": "[parameters('destinationSnowflakeRole')]"
+                        },
+                        {
+                          "name": "DESTINATION_SNOWFLAKE_DATABASE",
+                          "value": "[parameters('destinationSnowflakeDatabase')]"
+                        },
+                        {
+                          "name": "BENCHMARK_DATASETS",
+                          "value": "TPCH_SF1,TPCH_SF10,TPCH_SF100,TPCH_SF1000"
+                        },
+                        {
+                          "name": "BENCHMARK_SOURCE_TABLE",
+                          "value": "LINEITEM"
+                        },
+                        {
+                          "name": "BENCHMARK_SOURCE_CHUNK_ROWS",
+                          "value": "50000"
+                        },
+                        {
+                          "name": "BENCHMARK_WORK_ROOT",
+                          "value": "/tmp/dlthubarrow"
+                        }
+                      ],
+                      "probes": [
+                        {
+                          "type": "liveness",
+                          "httpGet": {
+                            "path": "/healthz",
+                            "port": 8080
+                          },
+                          "periodSeconds": 10,
+                          "initialDelaySeconds": 15,
+                          "failureThreshold": 3
+                        },
+                        {
+                          "type": "readiness",
+                          "httpGet": {
+                            "path": "/healthz",
+                            "port": 8080
+                          },
+                          "periodSeconds": 5,
+                          "initialDelaySeconds": 5,
+                          "failureThreshold": 3
+                        }
+                      ]
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 1
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppsEnvironmentName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "containerAppName": {
+              "type": "string",
+              "value": "[parameters('containerAppName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'acr')]",
+        "[resourceId('Microsoft.Resources/deployments', 'appinsights')]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName'))]",
+        "[resourceId('Microsoft.Resources/deployments', 'keyvault')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "CONTAINER_APP_NAME": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'containerApp'), '2025-04-01').outputs.containerAppName.value]"
+    },
+    "CONTAINER_APP_IDENTITY_NAME": {
+      "type": "string",
+      "value": "[variables('containerAppIdentityName')]"
+    },
+    "CONTAINER_APP_IDENTITY_CLIENT_ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName')), '2023-01-31').clientId]"
+    },
+    "CONTAINER_APP_IDENTITY_PRINCIPAL_ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('containerAppIdentityName')), '2023-01-31').principalId]"
+    },
+    "ACR_NAME": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'acr'), '2025-04-01').outputs.acrName.value]"
+    },
+    "ACR_LOGIN_SERVER": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'acr'), '2025-04-01').outputs.acrLoginServer.value]"
+    },
+    "AZURE_CONTAINER_REGISTRY_ENDPOINT": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'acr'), '2025-04-01').outputs.acrLoginServer.value]"
+    },
+    "AZURE_CONTAINER_REGISTRY_NAME": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'acr'), '2025-04-01').outputs.acrName.value]"
+    },
+    "KEY_VAULT_NAME": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'keyvault'), '2025-04-01').outputs.keyVaultName.value]"
+    },
+    "KEY_VAULT_URI": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'keyvault'), '2025-04-01').outputs.keyVaultUri.value]"
+    },
+    "APPLICATION_INSIGHTS_NAME": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appinsights'), '2025-04-01').outputs.applicationInsightsName.value]"
+    },
+    "LOG_ANALYTICS_WORKSPACE_NAME": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'appinsights'), '2025-04-01').outputs.logAnalyticsWorkspaceName.value]"
+    }
+  }
+}
