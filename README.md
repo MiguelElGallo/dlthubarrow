@@ -14,14 +14,16 @@ The app extracts Snowflake result sets with Arrow batches, yields `pyarrow.Table
 
 ```mermaid
 flowchart LR
-    A["Snowflake sample data\nSNOWFLAKE_SAMPLE_DATA.TPCH_SF1.LINEITEM"] --> B["Container App\n0.25 vCPU / 0.5 GiB"]
-    K["Azure Key Vault\nSnowflake PAT + run key"] --> B
-    B --> C["Snowflake connector\nkeyset-paged queries + fetch_arrow_all()"]
-    C --> D["Arrow pages\npyarrow.Table"]
-    D --> E["dlt pipeline\nloader_file_format=parquet"]
-    E --> F["Snowflake target\ndummy.TPCH_SF1.LINEITEM"]
-    B --> G["Telemetry\nmemory, disk, batch, throughput"]
-    G --> H["Azure Monitor\nLogs + Metrics"]
+    S["Source Snowflake\nSNOWFLAKE_SAMPLE_DATA.TPCH_SF1.LINEITEM"] --> Q["Ordered page query\nLIMIT 50000"]
+    Q --> X["Snowflake connector\nfetch_arrow_all()"]
+    K["Azure Key Vault\nPATs + run key"] --> A["Azure Container App\nbenchmark runner"]
+    X --> A
+    A --> P["Arrow page\npyarrow.Table"]
+    P --> D["dlt resource"]
+    D --> L["dlt load package\nParquet payload + pipeline state"]
+    L --> T["Target Snowflake\ndummy.TPCH_SF1.LINEITEM"]
+    A --> M["Telemetry sampler\nmemory, disk, batch, timing"]
+    M --> Z["Azure Monitor\nlogs + metrics"]
 ```
 
 ## Quick Start
